@@ -83,7 +83,3 @@ For sharing in public forums, some fields are already deliberately masked or omi
 - Storage serial numbers are masked (only the last 4 characters shown)
 
 Still, review the report manually before sharing it — the default (everything on) exposes the most system detail via the full package list and service overview; use `--no-packages`, `--no-services`, or `--minimal` if needed.
-
-## License
-
-Not verified — please set this in the repo yourself (e.g. MIT), currently no license is included.
