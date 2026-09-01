@@ -286,8 +286,17 @@ elif lsmod 2>/dev/null | grep -q '^amdgpu'; then
     gpu_ver="${gpu_ver:-N/A}"
     vram_path=$(grep -rl amdgpu /sys/class/drm/card*/device/driver/module/drivers 2>/dev/null \
         | head -n1 | sed 's|/driver/module/drivers.*||' || true)
-    [ -z "$vram_path" ] && vram_path=$(ls /sys/class/drm/card*/device/mem_info_vram_total 2>/dev/null \
-        | head -n1 | sed 's|/mem_info_vram_total||' || true)
+    
+    if [ -z "$vram_path" ]; then
+        # SC2012 fix: use a safe glob loop instead of 'ls'
+        for vpath in /sys/class/drm/card*/device/mem_info_vram_total; do
+            if [ -f "$vpath" ]; then
+                vram_path=$(dirname "$vpath")
+                break
+            fi
+        done
+    fi
+
     if [ -n "$vram_path" ] && [ -f "${vram_path}/mem_info_vram_total" ]; then
         gpu_vram=$(awk '{printf "%.0f MiB", $1/1024/1024}' "${vram_path}/mem_info_vram_total" 2>/dev/null || echo unknown)
     fi
@@ -584,8 +593,8 @@ case "$pkg_family" in
         fi
         ;;
     debian)
-        repos=$(find /etc/apt/sources.list.d -maxdepth 1 -name '*.list' -o -name '*.sources' 2>/dev/null \
-            | xargs -n1 basename 2>/dev/null | tr '\n' ' ' || true)
+        # SC2038 fix: use -printf to avoid xargs/basename complexity
+        repos=$(find /etc/apt/sources.list.d -maxdepth 1 \( -name '*.list' -o -name '*.sources' \) -printf '%f ' 2>/dev/null || true)
         [ -f /etc/apt/sources.list ] && repos="sources.list ${repos}"
         repos="${repos:-unknown}"
         first_repo="(Debian/apt: no priority order like pacman - first file is not meaningful)"
@@ -719,10 +728,13 @@ if [ "$inc_svc" -eq 1 ]; then
         else
             lc=$(wc -l <<< "$raw")
             if [ "$lc" -gt 200 ]; then
+                # SC2001: sed is used because Bash expansion doesn't support multiline ^ anchors
+                # shellcheck disable=SC2001
                 journal_errs=$(head -n 200 <<< "$raw" | sed 's/^/  /')
                 journal_errs="${journal_errs}
   [... truncated: ${lc} lines across the last 30 entries, capped here at 200 lines. Full output via: journalctl -p err -b -n 30 ...]"
             else
+                # shellcheck disable=SC2001
                 journal_errs=$(sed 's/^/  /' <<< "$raw")
             fi
         fi
@@ -854,6 +866,7 @@ tmp_report=$(mktemp /tmp/sys_audit_report.XXXXXX)
     printf '%-30s : %s\n' "Microcode status" "$ucode"
     printf '\nInstalled kernel images:\n'
     if [ -n "$kernel_inst" ]; then
+        # shellcheck disable=SC2001
         sed 's/^/  - /' <<< "$kernel_inst"
     else
         printf '  (no kernel packages found via %s)\n' "$pkg_family"
@@ -897,6 +910,7 @@ tmp_report=$(mktemp /tmp/sys_audit_report.XXXXXX)
             fi
             printf '\nInstalled foreign packages (AUR):\n'
             if [ -n "$aur_foreign" ]; then
+                # shellcheck disable=SC2001
                 sed 's/^/  - /' <<< "$aur_foreign"
             else
                 printf '  (none)\n'
